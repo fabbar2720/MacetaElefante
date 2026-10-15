@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -50,12 +52,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
 
 @Composable
 fun WeightHistoryScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onRegistroEliminado: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -67,6 +68,18 @@ fun WeightHistoryScreen(
         mutableStateOf(true)
     }
 
+    var registroPendienteEliminar by remember {
+        mutableStateOf<WeightRecord?>(null)
+    }
+
+    var eliminando by remember {
+        mutableStateOf(false)
+    }
+
+    var mensaje by remember {
+        mutableStateOf<String?>(null)
+    }
+
     LaunchedEffect(Unit) {
         registros = withContext(Dispatchers.IO) {
             WeightRepository.obtenerTodos(context)
@@ -76,6 +89,81 @@ fun WeightHistoryScreen(
 
     val registrosGrafica = remember(registros) {
         registros.sortedBy { it.id }
+    }
+
+    if (registroPendienteEliminar != null) {
+        val registro = registroPendienteEliminar!!
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!eliminando) {
+                    registroPendienteEliminar = null
+                }
+            },
+            title = {
+                Text("Eliminar medición")
+            },
+            text = {
+                Text(
+                    "¿Quieres eliminar la medición de " +
+                            String.format(
+                                Locale.getDefault(),
+                                "%.1f g",
+                                registro.weightGrams
+                            ) +
+                            " del ${registro.dateTime}?\n\n" +
+                            "Esta acción no se puede deshacer."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !eliminando,
+                    onClick = {
+                        eliminando = true
+
+                        // La eliminación se realiza fuera del hilo principal.
+                        // El resultado se procesa en una corrutina.
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !eliminando,
+                    onClick = {
+                        registroPendienteEliminar = null
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // El diálogo de confirmación y la operación de borrado
+    // se controlan con este efecto para no bloquear la interfaz.
+    LaunchedEffect(eliminando, registroPendienteEliminar) {
+        if (eliminando && registroPendienteEliminar != null) {
+            val registro = registroPendienteEliminar!!
+
+            val eliminado = withContext(Dispatchers.IO) {
+                WeightRepository.eliminar(context, registro.id)
+            }
+
+            if (eliminado) {
+                registros = withContext(Dispatchers.IO) {
+                    WeightRepository.obtenerTodos(context)
+                }
+                mensaje = "Medición eliminada correctamente."
+                onRegistroEliminado()
+            } else {
+                mensaje = "No se pudo eliminar la medición."
+            }
+
+            eliminando = false
+            registroPendienteEliminar = null
+        }
     }
 
     Scaffold(
@@ -110,6 +198,22 @@ fun WeightHistoryScreen(
             Spacer(
                 modifier = Modifier.height(12.dp)
             )
+
+            if (mensaje != null) {
+                Text(
+                    text = mensaje!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                TextButton(
+                    onClick = { mensaje = null }
+                ) {
+                    Text("Cerrar aviso")
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             when {
                 cargando -> {
@@ -168,7 +272,10 @@ fun WeightHistoryScreen(
                             key = { it.id }
                         ) { registro ->
                             RegistroPesoCard(
-                                registro = registro
+                                registro = registro,
+                                onEliminar = {
+                                    registroPendienteEliminar = registro
+                                }
                             )
                         }
                     }
@@ -197,7 +304,6 @@ private fun GraficaEvolucionPeso(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
             Text(
                 text = "Evolución del peso",
                 style = MaterialTheme.typography.titleLarge,
@@ -211,9 +317,7 @@ private fun GraficaEvolucionPeso(
             )
 
             if (registros.size < 2) {
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Necesitas al menos dos mediciones " +
@@ -382,10 +486,7 @@ private fun GraficaLineal(
             )
         }
 
-        canvas.drawPath(
-            ruta,
-            pinturaLinea
-        )
+        canvas.drawPath(ruta, pinturaLinea)
 
         registros.forEachIndexed { indice, registro ->
             val x = if (registros.size == 1) {
@@ -401,19 +502,8 @@ private fun GraficaLineal(
 
             val y = margenSuperior + altoGrafica * proporcion
 
-            canvas.drawCircle(
-                x,
-                y,
-                5f * escala,
-                pinturaPunto
-            )
-
-            canvas.drawCircle(
-                x,
-                y,
-                2f * escala,
-                pinturaCentroPunto
-            )
+            canvas.drawCircle(x, y, 5f * escala, pinturaPunto)
+            canvas.drawCircle(x, y, 2f * escala, pinturaCentroPunto)
         }
     }
 
@@ -426,7 +516,8 @@ private fun GraficaLineal(
 
 @Composable
 private fun RegistroPesoCard(
-    registro: WeightRecord
+    registro: WeightRecord,
+    onEliminar: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -472,6 +563,18 @@ private fun RegistroPesoCard(
                 ruta = registro.fotoPlantaPath,
                 titulo = "Fotografía de la planta"
             )
+
+            HorizontalDivider()
+
+            TextButton(
+                onClick = onEliminar,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(
+                    text = "Eliminar medición",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }
@@ -552,10 +655,7 @@ private fun cargarBitmapOrientado(
             inJustDecodeBounds = true
         }
 
-        BitmapFactory.decodeFile(
-            ruta,
-            opcionesMedidas
-        )
+        BitmapFactory.decodeFile(ruta, opcionesMedidas)
 
         if (
             opcionesMedidas.outWidth <= 0 ||

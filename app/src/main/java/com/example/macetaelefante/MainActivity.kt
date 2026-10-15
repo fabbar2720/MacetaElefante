@@ -1,4 +1,3 @@
-
 package com.example.macetaelefante
 
 import android.graphics.Bitmap
@@ -57,7 +56,6 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -72,12 +70,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MacetaElefanteApp() {
-
     val context = LocalContext.current
 
-    var pantalla by rememberSaveable {
-        mutableStateOf("inicio")
-    }
+    var pantalla by rememberSaveable { mutableStateOf("inicio") }
 
     var ultimoPeso by rememberSaveable {
         mutableStateOf<Double?>(null)
@@ -100,7 +95,7 @@ fun MacetaElefanteApp() {
     }
 
     var cambioPeso by rememberSaveable {
-        mutableStateOf("Registra otra medición para comparar.")
+        mutableStateOf("Todavía no hay mediciones.")
     }
 
     LaunchedEffect(Unit) {
@@ -124,15 +119,12 @@ fun MacetaElefanteApp() {
         )
     }
 
-    // Botón Atrás del sistema:
-    // si estamos en otra pantalla, regresamos al inicio.
     BackHandler(enabled = pantalla != "inicio") {
         pantalla = "inicio"
         mensaje = ""
     }
 
     when (pantalla) {
-
         "registro_peso" -> {
             WeightEntryScreen(
                 onBack = {
@@ -140,7 +132,6 @@ fun MacetaElefanteApp() {
                     mensaje = ""
                 },
                 onSave = { peso, fecha, notas ->
-
                     val registro = WeightRecord(
                         id = System.currentTimeMillis(),
                         weightGrams = peso,
@@ -148,15 +139,11 @@ fun MacetaElefanteApp() {
                         notes = notas
                     )
 
-                    WeightRepository.guardar(
-                        context,
-                        registro
-                    )
+                    WeightRepository.guardar(context, registro)
 
                     ultimoPeso = peso
                     fechaUltimoPeso = fecha
                     ultimaNota = notas
-                    fotoPlantaPath = null
 
                     val registros = WeightRepository.obtenerTodos(context)
 
@@ -166,14 +153,10 @@ fun MacetaElefanteApp() {
                     )
 
                     pantalla = "inicio"
-                    mensaje = "Peso guardado correctamente."
+                    mensaje = "Medición guardada correctamente."
                 },
                 onSaveWithPhotos = {
-                        peso,
-                        fecha,
-                        notas,
-                        rutaBascula,
-                        rutaPlanta ->
+                        peso, fecha, notas, rutaBascula, rutaPlanta ->
 
                     val registro = WeightRecord(
                         id = System.currentTimeMillis(),
@@ -184,10 +167,7 @@ fun MacetaElefanteApp() {
                         fotoPlantaPath = rutaPlanta
                     )
 
-                    WeightRepository.guardar(
-                        context,
-                        registro
-                    )
+                    WeightRepository.guardar(context, registro)
 
                     ultimoPeso = peso
                     fechaUltimoPeso = fecha
@@ -202,7 +182,7 @@ fun MacetaElefanteApp() {
                     )
 
                     pantalla = "inicio"
-                    mensaje = "Peso y fotografías guardados correctamente."
+                    mensaje = "Medición guardada correctamente."
                 }
             )
         }
@@ -211,6 +191,24 @@ fun MacetaElefanteApp() {
             WeightHistoryScreen(
                 onBack = {
                     pantalla = "inicio"
+                },
+                onRegistroEliminado = {
+                    val registros = WeightRepository.obtenerTodos(context)
+
+                    val ultimoRegistro = registros.firstOrNull()
+                    val registroAnterior = registros.getOrNull(1)
+
+                    ultimoPeso = ultimoRegistro?.weightGrams
+                    fechaUltimoPeso = ultimoRegistro?.dateTime.orEmpty()
+                    ultimaNota = ultimoRegistro?.notes.orEmpty()
+                    fotoPlantaPath = ultimoRegistro?.fotoPlantaPath
+
+                    cambioPeso = calcularCambioPeso(
+                        ultimo = ultimoRegistro,
+                        anterior = registroAnterior
+                    )
+
+                    mensaje = "Historial actualizado."
                 }
             )
         }
@@ -224,17 +222,15 @@ fun MacetaElefanteApp() {
                 cambioPeso = cambioPeso,
                 mensaje = mensaje,
                 onRegistrarPeso = {
-                    pantalla = "registro_peso"
                     mensaje = ""
+                    pantalla = "registro_peso"
                 },
                 onRegistrarRiego = {
-                    mensaje =
-                        "El registro de riego estará disponible " +
-                                "en un siguiente paso."
+                    mensaje = "El registro de riego estará disponible próximamente."
                 },
                 onVerHistorial = {
-                    pantalla = "historial"
                     mensaje = ""
+                    pantalla = "historial"
                 }
             )
         }
@@ -245,7 +241,6 @@ private fun calcularCambioPeso(
     ultimo: WeightRecord?,
     anterior: WeightRecord?
 ): String {
-
     if (ultimo == null) {
         return "Todavía no hay mediciones."
     }
@@ -258,19 +253,28 @@ private fun calcularCambioPeso(
 
     return when {
         diferencia > 0 -> {
-            "Ganó ${String.format(Locale.getDefault(), "%.1f", diferencia)} g"
+            "Ganó ${
+                String.format(
+                    Locale.getDefault(),
+                    "%.1f",
+                    diferencia
+                )
+            } g"
         }
 
         diferencia < 0 -> {
-            "Perdió ${String.format(Locale.getDefault(), "%.1f", -diferencia)} g"
+            "Perdió ${
+                String.format(
+                    Locale.getDefault(),
+                    "%.1f",
+                    -diferencia
+                )
+            } g"
         }
 
-        else -> {
-            "Sin cambio (0 g)"
-        }
+        else -> "Sin cambio (0 g)"
     }
 }
-
 @Composable
 fun HomeScreen(
     ultimoPeso: Double?,
@@ -283,207 +287,213 @@ fun HomeScreen(
     onRegistrarRiego: () -> Unit,
     onVerHistorial: () -> Unit
 ) {
-
     Scaffold(
         modifier = Modifier.fillMaxSize()
-    ) { innerPadding ->
+    ) { paddingValues ->
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Text(
+                text = "Mi jardín",
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
-            Column {
-                Text(
-                    text = "Mi jardín",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            Spacer(modifier = Modifier.height(6.dp))
 
-                Text(
-                    text = "Control y cuidado de mis plantas",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "Control y cuidado de mis plantas",
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 4.dp
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Maceta Elefante",
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Planta: Pie de elefante",
+                        fontSize = 16.sp
+                    )
+
+                    Text(
+                        text = "Beaucarnea recurvata",
+                        fontSize = 14.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    FotoPlantaInicio(ruta = fotoPlantaPath)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "Resumen de seguimiento",
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp)
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = RoundedCornerShape(16.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FotoPlantaInicio(
-                            ruta = fotoPlantaPath
-                        )
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(16.dp)
-                    )
-
                     Text(
-                        text = "Maceta Elefante",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        text = "Último peso registrado",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
                     )
 
-                    Text(
-                        text = "Planta: Pie de elefante",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-                    Text(
-                        text = "Beaucarnea recurvata",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Text(
-                text = "Resumen de seguimiento",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-
-                    Text("Último peso registrado")
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
                         text = ultimoPeso?.let {
-                            String.format(
-                                Locale.getDefault(),
-                                "%.1f g",
-                                it
-                            )
-                        } ?: "-- g",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold
+                            "${String.format(Locale.getDefault(), "%.1f", it)} g"
+                        } ?: "Sin mediciones",
+                        fontSize = 25.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = if (fechaUltimoPeso.isNotBlank()) {
-                            fechaUltimoPeso
+                            "Fecha: $fechaUltimoPeso"
                         } else {
-                            "Todavía no hay mediciones"
+                            "Fecha: sin registro"
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 14.sp
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Cambio de peso")
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                        Text(
-                            text = cambioPeso,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 12.dp)
-                        )
-                    }
+                    Text(
+                        text = "Comparación con la medición anterior",
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = cambioPeso,
+                        fontSize = 16.sp
+                    )
 
                     if (ultimaNota.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = "Nota: $ultimaNota",
-                            style = MaterialTheme.typography.bodySmall
+                            text = "Última nota",
+                            fontWeight = FontWeight.SemiBold
                         )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(text = ultimaNota)
                     }
                 }
             }
 
+            if (mensaje.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = mensaje,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(22.dp))
+
             Text(
                 text = "¿Qué deseas hacer?",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Button(
                 onClick = onRegistrarPeso,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp)
+                    .height(52.dp)
             ) {
-                Text("⚖️  Registrar peso")
+                Text(
+                    text = "Registrar peso",
+                    fontSize = 16.sp
+                )
             }
 
-            OutlinedButton(
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
                 onClick = onRegistrarRiego,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp)
+                    .height(52.dp)
             ) {
-                Text("💧  Registrar riego")
+                Text(
+                    text = "Registrar riego",
+                    fontSize = 16.sp
+                )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedButton(
                 onClick = onVerHistorial,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp)
+                    .height(52.dp)
             ) {
-                Text("📊  Ver historial y estadísticas")
+                Text(
+                    text = "Ver historial",
+                    fontSize = 16.sp
+                )
             }
 
-            if (mensaje.isNotBlank()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = mensaje,
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            Text(
-                text = "Cada medición nos ayudará a conocer mejor " +
-                        "las necesidades de tu planta.",
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -492,56 +502,43 @@ fun HomeScreen(
 private fun FotoPlantaInicio(
     ruta: String?
 ) {
-    if (ruta.isNullOrBlank()) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "🪴",
-                fontSize = 64.sp
-            )
-
-            Text(
-                text = "Aquí aparecerá la foto de tu planta",
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center
-            )
-        }
-        return
-    }
-
     val bitmap by produceState<Bitmap?>(
         initialValue = null,
         key1 = ruta
     ) {
-        value = withContext(Dispatchers.IO) {
-            cargarFotoPlanta(ruta)
+        value = if (ruta.isNullOrBlank()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
+                cargarFotoPlanta(ruta)
+            }
         }
     }
 
     if (bitmap != null) {
         Image(
             bitmap = bitmap!!.asImageBitmap(),
-            contentDescription = "Fotografía más reciente de la planta",
+            contentDescription = "Fotografía de la planta",
             modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp),
-            contentScale = ContentScale.Fit
+                .fillMaxWidth()
+                .height(230.dp),
+            contentScale = ContentScale.Crop
         )
     } else {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "🪴",
-                fontSize = 48.sp
-            )
-
-            Text(
-                text = "Cargando fotografía...",
-                style = MaterialTheme.typography.bodySmall
+                text = "Aquí aparecerá la foto de tu planta",
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(16.dp)
             )
         }
     }
@@ -551,101 +548,65 @@ private fun cargarFotoPlanta(
     ruta: String
 ): Bitmap? {
     return try {
-        val opcionesMedidas = BitmapFactory.Options().apply {
+        val opciones = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
 
-        BitmapFactory.decodeFile(
-            ruta,
-            opcionesMedidas
-        )
+        BitmapFactory.decodeFile(ruta, opciones)
 
-        if (
-            opcionesMedidas.outWidth <= 0 ||
-            opcionesMedidas.outHeight <= 0
-        ) {
-            return null
-        }
-
-        var muestra = 1
-
-        while (
-            opcionesMedidas.outWidth / muestra > 1600 ||
-            opcionesMedidas.outHeight / muestra > 1600
-        ) {
-            muestra *= 2
-        }
-
-        val opciones = BitmapFactory.Options().apply {
-            inSampleSize = muestra
-            inPreferredConfig = Bitmap.Config.RGB_565
-        }
+        opciones.inSampleSize = 2
+        opciones.inJustDecodeBounds = false
 
         val bitmap = BitmapFactory.decodeFile(
             ruta,
             opciones
         ) ?: return null
 
-        val orientacion = try {
-            ExifInterface(ruta).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL
-            )
-        } catch (e: Exception) {
+        val exif = ExifInterface(ruta)
+
+        val orientacion = exif.getAttributeInt(
+            ExifInterface.TAG_ORIENTATION,
             ExifInterface.ORIENTATION_NORMAL
-        }
+        )
 
         val matriz = Matrix()
 
         when (orientacion) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL ->
-                matriz.setScale(-1f, 1f)
-
-            ExifInterface.ORIENTATION_ROTATE_180 ->
-                matriz.setRotate(180f)
-
-            ExifInterface.ORIENTATION_FLIP_VERTICAL ->
-                matriz.setScale(1f, -1f)
-
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matriz.setRotate(90f)
-                matriz.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_90 -> {
+                matriz.postRotate(90f)
             }
 
-            ExifInterface.ORIENTATION_ROTATE_90 ->
-                matriz.setRotate(90f)
-
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matriz.setRotate(-90f)
-                matriz.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> {
+                matriz.postRotate(180f)
             }
 
-            ExifInterface.ORIENTATION_ROTATE_270 ->
-                matriz.setRotate(270f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> {
+                matriz.postRotate(270f)
+            }
+
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
+                matriz.preScale(-1f, 1f)
+            }
+
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matriz.preScale(1f, -1f)
+            }
         }
 
-        if (matriz.isIdentity) {
-            bitmap
+        if (!matriz.isIdentity) {
+            Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+                matriz,
+                true
+            )
         } else {
-            try {
-                Bitmap.createBitmap(
-                    bitmap,
-                    0,
-                    0,
-                    bitmap.width,
-                    bitmap.height,
-                    matriz,
-                    true
-                ).also { resultado ->
-                    if (resultado !== bitmap) {
-                        bitmap.recycle()
-                    }
-                }
-            } catch (e: Exception) {
-                bitmap
-            }
+            bitmap
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 }
