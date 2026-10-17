@@ -1,4 +1,3 @@
-
 package com.example.macetaelefante.ui.screens
 
 import android.content.Context
@@ -87,6 +86,14 @@ fun WeightEntryScreen(
         mutableStateOf<Uri?>(null)
     }
 
+    var fechaHora by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var fechaHoraDisponible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     var leyendoPeso by remember {
         mutableStateOf(false)
     }
@@ -97,13 +104,6 @@ fun WeightEntryScreen(
 
     var mensajeLectura by rememberSaveable {
         mutableStateOf("")
-    }
-
-    val fechaHora = remember {
-        SimpleDateFormat(
-            "dd/MM/yyyy HH:mm",
-            Locale.getDefault()
-        ).format(Date())
     }
 
     val selectorFotoBascula =
@@ -117,55 +117,81 @@ fun WeightEntryScreen(
                 mensajeLectura = "Analizando la fotografía..."
                 leyendoPeso = true
 
-                try {
-                    val imagen = InputImage.fromFilePath(
-                        context,
-                        uri
-                    )
+                scope.launch {
+                    val fechaExif = withContext(Dispatchers.IO) {
+                        leerFechaHoraExif(context, uri)
+                    }
 
-                    val reconocedor = TextRecognition.getClient(
-                        TextRecognizerOptions.DEFAULT_OPTIONS
-                    )
+                    if (fechaExif != null) {
+                        fechaHora = fechaExif
+                        fechaHoraDisponible = true
+                    } else {
+                        fechaHora = ""
+                        fechaHoraDisponible = false
+                    }
 
-                    reconocedor.process(imagen)
-                        .addOnSuccessListener { resultado ->
-                            val patron = Regex(
-                                """(?<!\d)\d{1,6}(?:[.,]\d{1,2})?(?!\d)"""
-                            )
+                    try {
+                        val imagen = InputImage.fromFilePath(
+                            context,
+                            uri
+                        )
 
-                            val coincidencia = patron.find(
-                                resultado.text
-                            )
+                        val reconocedor = TextRecognition.getClient(
+                            TextRecognizerOptions.DEFAULT_OPTIONS
+                        )
 
-                            if (coincidencia != null) {
-                                pesoTexto = coincidencia.value
-                                    .replace(',', '.')
+                        reconocedor.process(imagen)
+                            .addOnSuccessListener { resultado ->
+                                val patron = Regex(
+                                    """(?<!\d)\d{1,6}(?:[.,]\d{1,2})?(?!\d)"""
+                                )
 
-                                mensajeLectura =
-                                    "Peso detectado. Verifica que " +
-                                            "el número sea correcto."
-                            } else {
-                                mensajeLectura =
-                                    "No se detectó el peso. " +
-                                            "Puedes introducirlo manualmente."
+                                val coincidencia = patron.find(
+                                    resultado.text
+                                )
+
+                                if (coincidencia != null) {
+                                    pesoTexto = coincidencia.value
+                                        .replace(',', '.')
+
+                                    mensajeLectura =
+                                        "Peso detectado. Verifica que " +
+                                                "el número sea correcto."
+                                } else {
+                                    mensajeLectura =
+                                        "No se detectó el peso. " +
+                                                "Puedes introducirlo manualmente."
+                                }
+
+                                if (!fechaHoraDisponible) {
+                                    mensajeLectura +=
+                                        "\nLa foto no contiene una fecha " +
+                                                "EXIF válida. Usa una foto " +
+                                                "original que conserve sus metadatos."
+                                }
+
+                                leyendoPeso = false
+                                reconocedor.close()
                             }
+                            .addOnFailureListener {
+                                leyendoPeso = false
+                                mensajeLectura =
+                                    "No se pudo leer el peso. " +
+                                            "Introdúcelo manualmente."
 
-                            leyendoPeso = false
-                            reconocedor.close()
-                        }
-                        .addOnFailureListener {
-                            leyendoPeso = false
-                            mensajeLectura =
-                                "No se pudo leer el peso. " +
-                                        "Introdúcelo manualmente."
+                                if (!fechaHoraDisponible) {
+                                    mensajeLectura +=
+                                        "\nTampoco se encontró fecha EXIF."
+                                }
 
-                            reconocedor.close()
-                        }
-                } catch (e: Exception) {
-                    leyendoPeso = false
-                    mensajeLectura =
-                        "No se pudo analizar la foto. " +
-                                "Introduce el peso manualmente."
+                                reconocedor.close()
+                            }
+                    } catch (e: Exception) {
+                        leyendoPeso = false
+                        mensajeLectura =
+                            "No se pudo analizar la foto. " +
+                                    "Introduce el peso manualmente."
+                    }
                 }
             }
         }
@@ -217,17 +243,26 @@ fun WeightEntryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Fecha y hora",
+                        text = "Fecha y hora de la fotografía",
                         fontWeight = FontWeight.SemiBold
                     )
 
                     Text(
-                        text = fechaHora,
+                        text = if (fechaHoraDisponible) {
+                            fechaHora
+                        } else {
+                            "Fecha EXIF no disponible"
+                        },
                         style = MaterialTheme.typography.bodyLarge
                     )
 
                     Text(
-                        text = "Se registra la fecha y hora actuales.",
+                        text = if (fechaHoraDisponible) {
+                            "Tomada de los metadatos de la foto de la báscula."
+                        } else {
+                            "Selecciona una fotografía original que conserve " +
+                                    "la fecha y hora en sus metadatos."
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -262,7 +297,7 @@ fun WeightEntryScreen(
                     CircularProgressIndicator()
 
                     Text(
-                        text = "Reconociendo los números...",
+                        text = "Analizando la fotografía...",
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -378,6 +413,10 @@ fun WeightEntryScreen(
                         ) {
                             mensajeError =
                                 "Introduce un peso válido mayor que cero."
+                        } else if (!fechaHoraDisponible) {
+                            mensajeError =
+                                "No se puede guardar: la fotografía de la " +
+                                        "báscula no contiene una fecha EXIF válida."
                         } else {
                             guardando = true
                             mensajeError = ""
@@ -469,6 +508,39 @@ fun WeightEntryScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
         }
+    }
+}
+
+private fun leerFechaHoraExif(
+    context: Context,
+    uri: Uri
+): String? {
+    return try {
+        val fechaExif = context.contentResolver
+            .openInputStream(uri)
+            ?.use { input ->
+                val exif = ExifInterface(input)
+
+                exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                    ?: exif.getAttribute(ExifInterface.TAG_DATETIME_DIGITIZED)
+                    ?: exif.getAttribute(ExifInterface.TAG_DATETIME)
+            } ?: return null
+
+        val formatoExif = SimpleDateFormat(
+            "yyyy:MM:dd HH:mm:ss",
+            Locale.US
+        ).apply {
+            isLenient = false
+        }
+
+        val fecha = formatoExif.parse(fechaExif) ?: return null
+
+        SimpleDateFormat(
+            "dd/MM/yyyy HH:mm",
+            Locale.getDefault()
+        ).format(fecha)
+    } catch (_: Exception) {
+        null
     }
 }
 
@@ -630,7 +702,7 @@ private fun cargarBitmapOrientado(
             matriz,
             true
         )
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 }

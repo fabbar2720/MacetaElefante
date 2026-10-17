@@ -1,3 +1,4 @@
+
 package com.example.macetaelefante
 
 import android.graphics.Bitmap
@@ -14,7 +15,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,12 +48,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.macetaelefante.data.WeightRecord
 import com.example.macetaelefante.data.WeightRepository
+import com.example.macetaelefante.data.WateringRepository
+import com.example.macetaelefante.ui.screens.WateringEntryScreen
+import com.example.macetaelefante.ui.screens.WateringHistoryScreen
 import com.example.macetaelefante.ui.screens.WeightEntryScreen
 import com.example.macetaelefante.ui.screens.WeightHistoryScreen
 import com.example.macetaelefante.ui.theme.MacetaElefanteTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,7 +76,9 @@ class MainActivity : ComponentActivity() {
 fun MacetaElefanteApp() {
     val context = LocalContext.current
 
-    var pantalla by rememberSaveable { mutableStateOf("inicio") }
+    var pantalla by rememberSaveable {
+        mutableStateOf("inicio")
+    }
 
     var ultimoPeso by rememberSaveable {
         mutableStateOf<Double?>(null)
@@ -98,25 +104,50 @@ fun MacetaElefanteApp() {
         mutableStateOf("Todavía no hay mediciones.")
     }
 
+    var fechaUltimoRiego by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var cantidadUltimoRiego by rememberSaveable {
+        mutableStateOf<Int?>(null)
+    }
+
+    var idUltimoRiego by rememberSaveable {
+        mutableStateOf<Long?>(null)
+    }
+
     LaunchedEffect(Unit) {
-        val registros = withContext(Dispatchers.IO) {
+        val registrosPeso = withContext(Dispatchers.IO) {
             WeightRepository.obtenerTodos(context)
         }
 
-        val ultimoRegistro = registros.firstOrNull()
-        val registroAnterior = registros.getOrNull(1)
+        val ultimoRegistro = registrosPeso.firstOrNull()
+        val registroAnterior = registrosPeso.getOrNull(1)
 
         if (ultimoRegistro != null) {
             ultimoPeso = ultimoRegistro.weightGrams
             fechaUltimoPeso = ultimoRegistro.dateTime
             ultimaNota = ultimoRegistro.notes
             fotoPlantaPath = ultimoRegistro.fotoPlantaPath
+        } else {
+            ultimoPeso = null
+            fechaUltimoPeso = ""
+            ultimaNota = ""
+            fotoPlantaPath = null
         }
 
         cambioPeso = calcularCambioPeso(
             ultimo = ultimoRegistro,
             anterior = registroAnterior
         )
+
+        val ultimoRiego = withContext(Dispatchers.IO) {
+            WateringRepository.obtenerUltimo(context)
+        }
+
+        fechaUltimoRiego = ultimoRiego?.dateTime.orEmpty()
+        cantidadUltimoRiego = ultimoRiego?.waterAmountMl
+        idUltimoRiego = ultimoRiego?.id
     }
 
     BackHandler(enabled = pantalla != "inicio") {
@@ -187,10 +218,44 @@ fun MacetaElefanteApp() {
             )
         }
 
-        "historial" -> {
+        "registro_riego" -> {
+            WateringEntryScreen(
+                onGuardado = {
+                    val ultimoRiego =
+                        WateringRepository.obtenerUltimo(context)
+
+                    fechaUltimoRiego = ultimoRiego?.dateTime.orEmpty()
+                    cantidadUltimoRiego = ultimoRiego?.waterAmountMl
+                    idUltimoRiego = ultimoRiego?.id
+
+                    pantalla = "inicio"
+                    mensaje = "Riego guardado correctamente."
+                },
+                onCancelar = {
+                    pantalla = "inicio"
+                    mensaje = ""
+                }
+            )
+        }
+
+        "seleccionar_historial" -> {
+            SeleccionarHistorialScreen(
+                onHistorialPesos = {
+                    pantalla = "historial_pesos"
+                },
+                onHistorialRiegos = {
+                    pantalla = "historial_riegos"
+                },
+                onVolver = {
+                    pantalla = "inicio"
+                }
+            )
+        }
+
+        "historial_pesos" -> {
             WeightHistoryScreen(
                 onBack = {
-                    pantalla = "inicio"
+                    pantalla = "seleccionar_historial"
                 },
                 onRegistroEliminado = {
                     val registros = WeightRepository.obtenerTodos(context)
@@ -213,6 +278,24 @@ fun MacetaElefanteApp() {
             )
         }
 
+        "historial_riegos" -> {
+            WateringHistoryScreen(
+                onBack = {
+                    pantalla = "seleccionar_historial"
+                },
+                onRegistroEliminado = {
+                    val ultimoRiego =
+                        WateringRepository.obtenerUltimo(context)
+
+                    fechaUltimoRiego = ultimoRiego?.dateTime.orEmpty()
+                    cantidadUltimoRiego = ultimoRiego?.waterAmountMl
+                    idUltimoRiego = ultimoRiego?.id
+
+                    mensaje = "Historial de riegos actualizado."
+                }
+            )
+        }
+
         else -> {
             HomeScreen(
                 ultimoPeso = ultimoPeso,
@@ -220,19 +303,83 @@ fun MacetaElefanteApp() {
                 ultimaNota = ultimaNota,
                 fotoPlantaPath = fotoPlantaPath,
                 cambioPeso = cambioPeso,
+                fechaUltimoRiego = fechaUltimoRiego,
+                cantidadUltimoRiego = cantidadUltimoRiego,
+                idUltimoRiego = idUltimoRiego,
                 mensaje = mensaje,
                 onRegistrarPeso = {
                     mensaje = ""
                     pantalla = "registro_peso"
                 },
                 onRegistrarRiego = {
-                    mensaje = "El registro de riego estará disponible próximamente."
+                    mensaje = ""
+                    pantalla = "registro_riego"
                 },
                 onVerHistorial = {
                     mensaje = ""
-                    pantalla = "historial"
+                    pantalla = "seleccionar_historial"
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun SeleccionarHistorialScreen(
+    onHistorialPesos: () -> Unit,
+    onHistorialRiegos: () -> Unit,
+    onVolver: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Historial",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "¿Qué registros deseas consultar?",
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onHistorialPesos,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+        ) {
+            Text("Historial de pesos")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onHistorialRiegos,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+        ) {
+            Text("Historial de riegos")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onVolver,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Volver al inicio")
         }
     }
 }
@@ -275,6 +422,27 @@ private fun calcularCambioPeso(
         else -> "Sin cambio (0 g)"
     }
 }
+
+private fun calcularTiempoDesdeRiego(id: Long?): String {
+    if (id == null) {
+        return "Sin riegos registrados."
+    }
+
+    val diferencia = System.currentTimeMillis() - id
+
+    if (diferencia < 0) {
+        return "Fecha futura."
+    }
+
+    val dias = TimeUnit.MILLISECONDS.toDays(diferencia)
+
+    return when {
+        dias == 0L -> "Hace menos de 1 día"
+        dias == 1L -> "Hace 1 día"
+        else -> "Hace $dias días"
+    }
+}
+
 @Composable
 fun HomeScreen(
     ultimoPeso: Double?,
@@ -282,6 +450,9 @@ fun HomeScreen(
     ultimaNota: String,
     fotoPlantaPath: String?,
     cambioPeso: String,
+    fechaUltimoRiego: String,
+    cantidadUltimoRiego: Int?,
+    idUltimoRiego: Long?,
     mensaje: String,
     onRegistrarPeso: () -> Unit,
     onRegistrarRiego: () -> Unit,
@@ -364,6 +535,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Resumen del peso
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -428,6 +600,57 @@ fun HomeScreen(
 
                         Text(text = ultimaNota)
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Resumen del riego
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Último riego",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 18.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = cantidadUltimoRiego?.let {
+                            "$it ml de agua"
+                        } ?: "Todavía no hay riegos registrados",
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (fechaUltimoRiego.isNotBlank()) {
+                            "Fecha y hora: $fechaUltimoRiego"
+                        } else {
+                            "Fecha y hora: sin registro"
+                        },
+                        fontSize = 14.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = calcularTiempoDesdeRiego(idUltimoRiego),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
