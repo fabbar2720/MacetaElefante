@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -48,10 +47,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.macetaelefante.data.WeightRecord
 import com.example.macetaelefante.data.WeightRepository
+import com.example.macetaelefante.data.WateringRecord
+import com.example.macetaelefante.data.WateringRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+
+private const val MILISEGUNDOS_DIA = 86_400_000L
+
+private fun convertirFechaAMillis(
+    fecha: String,
+    idAlternativo: Long
+): Long {
+    return try {
+        SimpleDateFormat(
+            "dd/MM/yyyy HH:mm",
+            Locale.getDefault()
+        ).parse(fecha)?.time ?: idAlternativo
+    } catch (e: Exception) {
+        idAlternativo
+    }
+}
+
+private data class EventoHistorial(
+    val clave: String,
+    val fechaMillis: Long,
+    val peso: WeightRecord? = null,
+    val riego: WateringRecord? = null
+)
 
 @Composable
 fun WeightHistoryScreen(
@@ -62,6 +88,10 @@ fun WeightHistoryScreen(
 
     var registros by remember {
         mutableStateOf<List<WeightRecord>>(emptyList())
+    }
+
+    var riegos by remember {
+        mutableStateOf<List<WateringRecord>>(emptyList())
     }
 
     var cargando by remember {
@@ -81,14 +111,54 @@ fun WeightHistoryScreen(
     }
 
     LaunchedEffect(Unit) {
-        registros = withContext(Dispatchers.IO) {
-            WeightRepository.obtenerTodos(context)
+        val resultado = withContext(Dispatchers.IO) {
+            Pair(
+                WeightRepository.obtenerTodos(context),
+                WateringRepository.obtenerTodos(context)
+            )
         }
+
+        registros = resultado.first
+        riegos = resultado.second
         cargando = false
     }
 
     val registrosGrafica = remember(registros) {
-        registros.sortedBy { it.id }
+        registros.sortedBy {
+            convertirFechaAMillis(it.dateTime, it.id)
+        }
+    }
+
+    val eventosHistorial = remember(registros, riegos) {
+        val eventos = mutableListOf<EventoHistorial>()
+
+        registros.forEach { registro ->
+            eventos.add(
+                EventoHistorial(
+                    clave = "peso_${registro.id}",
+                    fechaMillis = convertirFechaAMillis(
+                        registro.dateTime,
+                        registro.id
+                    ),
+                    peso = registro
+                )
+            )
+        }
+
+        riegos.forEach { riego ->
+            eventos.add(
+                EventoHistorial(
+                    clave = "riego_${riego.id}",
+                    fechaMillis = convertirFechaAMillis(
+                        riego.dateTime,
+                        riego.id
+                    ),
+                    riego = riego
+                )
+            )
+        }
+
+        eventos.sortedByDescending { it.fechaMillis }
     }
 
     if (registroPendienteEliminar != null) {
@@ -120,9 +190,6 @@ fun WeightHistoryScreen(
                     enabled = !eliminando,
                     onClick = {
                         eliminando = true
-
-                        // La eliminación se realiza fuera del hilo principal.
-                        // El resultado se procesa en una corrutina.
                     }
                 ) {
                     Text("Eliminar")
@@ -141,8 +208,6 @@ fun WeightHistoryScreen(
         )
     }
 
-    // El diálogo de confirmación y la operación de borrado
-    // se controlan con este efecto para no bloquear la interfaz.
     LaunchedEffect(eliminando, registroPendienteEliminar) {
         if (eliminando && registroPendienteEliminar != null) {
             val registro = registroPendienteEliminar!!
@@ -155,6 +220,7 @@ fun WeightHistoryScreen(
                 registros = withContext(Dispatchers.IO) {
                     WeightRepository.obtenerTodos(context)
                 }
+
                 mensaje = "Medición eliminada correctamente."
                 onRegistroEliminado()
             } else {
@@ -176,10 +242,7 @@ fun WeightHistoryScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-
-            TextButton(
-                onClick = onBack
-            ) {
+            TextButton(onClick = onBack) {
                 Text("← Volver al inicio")
             }
 
@@ -190,14 +253,13 @@ fun WeightHistoryScreen(
             )
 
             Text(
-                text = "Consulta la evolución del peso y las fotografías de cada registro.",
+                text = "Observa cómo cambia el peso de la maceta " +
+                        "entre riegos y consulta todos tus registros.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (mensaje != null) {
                 Text(
@@ -227,7 +289,7 @@ fun WeightHistoryScreen(
                     }
                 }
 
-                registros.isEmpty() -> {
+                registros.isEmpty() && riegos.isEmpty() -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -235,9 +297,9 @@ fun WeightHistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Todavía no hay registros de peso.\n\n" +
-                                    "Registra tu primera medición para " +
-                                    "que aparezca aquí."
+                            text = "Todavía no hay registros.\n\n" +
+                                    "Registra tu primer peso o riego " +
+                                    "para que aparezca aquí."
                         )
                     }
                 }
@@ -247,11 +309,15 @@ fun WeightHistoryScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(
-                            bottom = 20.dp
-                        ),
+                        contentPadding = PaddingValues(bottom = 20.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        item(key = "analisis_riego") {
+                            AnalisisDesdeUltimoRiego(
+                                registros = registros,
+                                riegos = riegos
+                            )
+                        }
 
                         item(key = "grafica_peso") {
                             GraficaEvolucionPeso(
@@ -259,27 +325,313 @@ fun WeightHistoryScreen(
                             )
                         }
 
-                        item(key = "titulo_registros") {
-                            Text(
-                                text = "Mediciones registradas",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
+                        item(key = "titulo_historial_combinado") {
+                            Column(
+                                verticalArrangement =
+                                    Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Historial combinado",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Text(
+                                    text = "Pesos y riegos ordenados del " +
+                                            "más reciente al más antiguo.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                                )
+                            }
                         }
 
                         items(
-                            items = registros,
-                            key = { it.id }
-                        ) { registro ->
-                            RegistroPesoCard(
-                                registro = registro,
-                                onEliminar = {
-                                    registroPendienteEliminar = registro
-                                }
-                            )
+                            items = eventosHistorial,
+                            key = { it.clave }
+                        ) { evento ->
+                            if (evento.peso != null) {
+                                RegistroPesoCard(
+                                    registro = evento.peso,
+                                    onEliminar = {
+                                        registroPendienteEliminar =
+                                            evento.peso
+                                    }
+                                )
+                            } else if (evento.riego != null) {
+                                RegistroRiegoCard(
+                                    registro = evento.riego
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalisisDesdeUltimoRiego(
+    registros: List<WeightRecord>,
+    riegos: List<WateringRecord>
+) {
+    val riegoReciente = riegos.maxByOrNull {
+        convertirFechaAMillis(it.dateTime, it.id)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Análisis desde el último riego",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (riegoReciente == null) {
+                Text(
+                    text = "Todavía no hay riegos registrados. " +
+                            "Cuando registres uno, podrás comparar " +
+                            "las mediciones posteriores.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                return@Column
+            }
+
+            val fechaRiego = convertirFechaAMillis(
+                riegoReciente.dateTime,
+                riegoReciente.id
+            )
+
+            val pesosPosterioresAlRiego = registros
+                .filter {
+                    convertirFechaAMillis(it.dateTime, it.id) > fechaRiego
+                }
+                .sortedBy {
+                    convertirFechaAMillis(it.dateTime, it.id)
+                }
+
+            val pesoDespuesRegistrado =
+                riegoReciente.weightAfterGrams
+
+            val primeraMedicionPosterior =
+                pesosPosterioresAlRiego.firstOrNull()
+
+            val pesoReferencia: Double? =
+                pesoDespuesRegistrado
+                    ?: primeraMedicionPosterior?.weightGrams
+
+            val fechaReferencia: Long? =
+                if (pesoDespuesRegistrado != null) {
+                    fechaRiego
+                } else {
+                    primeraMedicionPosterior?.let {
+                        convertirFechaAMillis(it.dateTime, it.id)
+                    }
+                }
+
+            Text(
+                text = "Último riego: ${riegoReciente.dateTime}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Text(
+                text = "Agua aplicada: ${riegoReciente.waterAmountMl} ml",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (pesoReferencia == null || fechaReferencia == null) {
+                Text(
+                    text = "Todavía falta una medición de peso posterior " +
+                            "al riego para establecer una referencia.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                return@Column
+            }
+
+            val etiquetaReferencia =
+                if (pesoDespuesRegistrado != null) {
+                    "Peso de referencia (registrado después del riego)"
+                } else {
+                    "Peso de referencia (primera medición posterior)"
+                }
+
+            Text(
+                text = etiquetaReferencia,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Text(
+                text = String.format(
+                    Locale.getDefault(),
+                    "%.1f g",
+                    pesoReferencia
+                ),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            val medicionesComparables = registros
+                .filter {
+                    convertirFechaAMillis(it.dateTime, it.id) >
+                            fechaReferencia
+                }
+                .sortedBy {
+                    convertirFechaAMillis(it.dateTime, it.id)
+                }
+
+            val ultimaMedicion = medicionesComparables.lastOrNull()
+
+            if (ultimaMedicion == null) {
+                Text(
+                    text = "Aún no hay mediciones posteriores a la " +
+                            "referencia para calcular la variación.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                val cambio =
+                    ultimaMedicion.weightGrams - pesoReferencia
+
+                val descripcionCambio = when {
+                    cambio > 0.05 -> "El peso aumentó"
+                    cambio < -0.05 -> "El peso disminuyó"
+                    else -> "El peso prácticamente no cambió"
+                }
+
+                Text(
+                    text = "Última medición posterior: " +
+                            ultimaMedicion.dateTime,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Text(
+                    text = String.format(
+                        Locale.getDefault(),
+                        "Peso actual registrado: %.1f g",
+                        ultimaMedicion.weightGrams
+                    ),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Text(
+                    text = String.format(
+                        Locale.getDefault(),
+                        "%s: %s%.1f g",
+                        descripcionCambio,
+                        if (cambio > 0.05) "+" else "",
+                        cambio
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        cambio < -0.05 ->
+                            MaterialTheme.colorScheme.error
+                        cambio > 0.05 ->
+                            MaterialTheme.colorScheme.primary
+                        else ->
+                            MaterialTheme.colorScheme.onSurface
+                    }
+                )
+
+                val diasTranscurridos =
+                    ((convertirFechaAMillis(
+                        ultimaMedicion.dateTime,
+                        ultimaMedicion.id
+                    ) - fechaRiego) / MILISEGUNDOS_DIA)
+                        .coerceAtLeast(0L)
+
+                Text(
+                    text = if (diasTranscurridos == 1L) {
+                        "Ha pasado 1 día desde el riego."
+                    } else {
+                        "Han pasado $diasTranscurridos días desde el riego."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Text(
+                text = "La variación de peso no determina por sí sola " +
+                        "si debes regar. También considera la humedad " +
+                        "del sustrato y el estado de la planta.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RegistroRiegoCard(
+    registro: WateringRecord
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "💧 Riego registrado",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = registro.dateTime,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Text(
+                text = "Cantidad de agua: ${registro.waterAmountMl} ml",
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            registro.weightBeforeGrams?.let { peso ->
+                Text(
+                    text = String.format(
+                        Locale.getDefault(),
+                        "Peso antes del riego: %.1f g",
+                        peso
+                    ),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            registro.weightAfterGrams?.let { peso ->
+                Text(
+                    text = String.format(
+                        Locale.getDefault(),
+                        "Peso después del riego: %.1f g",
+                        peso
+                    ),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            if (registro.notes.isNotBlank()) {
+                Text(
+                    text = "Notas: ${registro.notes}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }
@@ -375,7 +727,6 @@ private fun GraficaLineal(
             .height(240.dp)
     ) {
         val canvas = drawContext.canvas.nativeCanvas
-
         val escala = density
         val margenIzquierdo = 58f * escala
         val margenDerecho = 14f * escala
@@ -463,7 +814,8 @@ private fun GraficaLineal(
                 margenIzquierdo + anchoGrafica / 2f
             } else {
                 margenIzquierdo +
-                        anchoGrafica * indice / (registros.size - 1).toFloat()
+                        anchoGrafica * indice /
+                        (registros.size - 1).toFloat()
             }
 
             val proporcion = (
@@ -493,7 +845,8 @@ private fun GraficaLineal(
                 margenIzquierdo + anchoGrafica / 2f
             } else {
                 margenIzquierdo +
-                        anchoGrafica * indice / (registros.size - 1).toFloat()
+                        anchoGrafica * indice /
+                        (registros.size - 1).toFloat()
             }
 
             val proporcion = (
@@ -508,7 +861,7 @@ private fun GraficaLineal(
     }
 
     Text(
-        text = "Mediciones (en orden cronológico)",
+        text = "Mediciones en orden cronológico",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -554,14 +907,12 @@ private fun RegistroPesoCard(
 
             HorizontalDivider()
 
-            FotoRegistro(
-                ruta = registro.fotoBasculaPath,
-                titulo = "Fotografía de la báscula"
-            )
+            val rutaFoto = registro.fotoBasculaPath
+                ?: registro.fotoPlantaPath
 
             FotoRegistro(
-                ruta = registro.fotoPlantaPath,
-                titulo = "Fotografía de la planta"
+                ruta = rutaFoto,
+                titulo = "Fotografía de la maceta y la báscula"
             )
 
             HorizontalDivider()

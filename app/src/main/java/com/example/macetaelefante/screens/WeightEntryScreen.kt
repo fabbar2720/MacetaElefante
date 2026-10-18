@@ -1,3 +1,4 @@
+
 package com.example.macetaelefante.ui.screens
 
 import android.content.Context
@@ -52,7 +53,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -82,10 +82,6 @@ fun WeightEntryScreen(
         mutableStateOf<Uri?>(null)
     }
 
-    var fotoPlanta by remember {
-        mutableStateOf<Uri?>(null)
-    }
-
     var fechaHora by rememberSaveable {
         mutableStateOf("")
     }
@@ -106,7 +102,7 @@ fun WeightEntryScreen(
         mutableStateOf("")
     }
 
-    val selectorFotoBascula =
+    val selectorFoto =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri ->
@@ -196,16 +192,6 @@ fun WeightEntryScreen(
             }
         }
 
-    val selectorFotoPlanta =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri ->
-            if (uri != null) {
-                fotoPlanta = uri
-                mensajeError = ""
-            }
-        }
-
     Scaffold { innerPadding ->
         Column(
             modifier = Modifier
@@ -258,7 +244,7 @@ fun WeightEntryScreen(
 
                     Text(
                         text = if (fechaHoraDisponible) {
-                            "Tomada de los metadatos de la foto de la báscula."
+                            "Tomada de los metadatos de la foto."
                         } else {
                             "Selecciona una fotografía original que conserve " +
                                     "la fecha y hora en sus metadatos."
@@ -269,25 +255,36 @@ fun WeightEntryScreen(
             }
 
             Text(
-                text = "Fotografía de la báscula",
+                text = "Fotografía de la maceta y la báscula",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
+            )
+
+            Text(
+                text = "Procura que aparezcan en la misma foto la planta " +
+                        "y el número de la báscula.",
+                style = MaterialTheme.typography.bodyMedium
             )
 
             PhotoPreview(
                 uri = fotoBascula,
                 context = context,
-                emoji = "⚖️",
-                description = "Fotografía de la báscula"
+                description = "Fotografía de la maceta y la báscula"
             )
 
             OutlinedButton(
                 onClick = {
-                    selectorFotoBascula.launch("image/*")
+                    selectorFoto.launch("image/*")
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Seleccionar foto de la báscula")
+                Text(
+                    if (fotoBascula == null) {
+                        "Seleccionar fotografía"
+                    } else {
+                        "Cambiar fotografía"
+                    }
+                )
             }
 
             if (leyendoPeso) {
@@ -342,28 +339,6 @@ fun WeightEntryScreen(
                 style = MaterialTheme.typography.bodySmall
             )
 
-            Text(
-                text = "Fotografía de la planta",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            PhotoPreview(
-                uri = fotoPlanta,
-                context = context,
-                emoji = "🪴",
-                description = "Fotografía de tu planta"
-            )
-
-            OutlinedButton(
-                onClick = {
-                    selectorFotoPlanta.launch("image/*")
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Seleccionar foto de la planta")
-            }
-
             OutlinedTextField(
                 value = notas,
                 onValueChange = {
@@ -413,70 +388,43 @@ fun WeightEntryScreen(
                         ) {
                             mensajeError =
                                 "Introduce un peso válido mayor que cero."
+                        } else if (fotoBascula == null) {
+                            mensajeError =
+                                "Selecciona una fotografía de la maceta " +
+                                        "y la báscula."
                         } else if (!fechaHoraDisponible) {
                             mensajeError =
-                                "No se puede guardar: la fotografía de la " +
-                                        "báscula no contiene una fecha EXIF válida."
+                                "No se puede guardar: la fotografía " +
+                                        "no contiene una fecha EXIF válida."
                         } else {
                             guardando = true
                             mensajeError = ""
 
                             scope.launch {
                                 try {
-                                    val rutas = withContext(
+                                    val rutaFoto = withContext(
                                         Dispatchers.IO
                                     ) {
-                                        val rutaBascula =
-                                            fotoBascula?.let {
-                                                copiarFotoPrivada(
-                                                    context,
-                                                    it,
-                                                    "bascula"
-                                                )
-                                            }
-
-                                        val rutaPlanta =
-                                            fotoPlanta?.let {
-                                                copiarFotoPrivada(
-                                                    context,
-                                                    it,
-                                                    "planta"
-                                                )
-                                            }
-
-                                        if (
-                                            fotoBascula != null &&
-                                            rutaBascula == null
-                                        ) {
-                                            error(
-                                                "No se pudo guardar " +
-                                                        "la foto de la báscula."
-                                            )
-                                        }
-
-                                        if (
-                                            fotoPlanta != null &&
-                                            rutaPlanta == null
-                                        ) {
-                                            error(
-                                                "No se pudo guardar " +
-                                                        "la foto de la planta."
-                                            )
-                                        }
-
-                                        Pair(
-                                            rutaBascula,
-                                            rutaPlanta
+                                        copiarFotoPrivada(
+                                            context,
+                                            fotoBascula!!,
+                                            "maceta"
                                         )
-                                    }
+                                    } ?: error(
+                                        "No se pudo guardar la fotografía."
+                                    )
 
                                     if (onSaveWithPhotos != null) {
+                                        // Se conserva la firma actual
+                                        // para no tener que cambiar la
+                                        // arquitectura de la aplicación.
+                                        // Ambos campos usan la misma ruta.
                                         onSaveWithPhotos(
                                             peso,
                                             fechaHora,
                                             notas.trim(),
-                                            rutas.first,
-                                            rutas.second
+                                            rutaFoto,
+                                            rutaFoto
                                         )
                                     } else {
                                         onSave(
@@ -488,7 +436,7 @@ fun WeightEntryScreen(
                                 } catch (e: Exception) {
                                     mensajeError =
                                         e.message
-                                            ?: "No se pudieron guardar las fotografías."
+                                            ?: "No se pudo guardar el registro."
                                 } finally {
                                     guardando = false
                                 }
@@ -548,7 +496,6 @@ private fun leerFechaHoraExif(
 private fun PhotoPreview(
     uri: Uri?,
     context: Context,
-    emoji: String,
     description: String
 ) {
     val bitmap: Bitmap? by produceState(
@@ -567,7 +514,7 @@ private fun PhotoPreview(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(190.dp),
+            .height(220.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor =
@@ -589,12 +536,12 @@ private fun PhotoPreview(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = emoji,
-                    style = MaterialTheme.typography.headlineLarge
+                    text = "Aquí aparecerá tu fotografía",
+                    style = MaterialTheme.typography.titleMedium
                 )
 
                 Text(
-                    text = description,
+                    text = "Incluye la planta y el peso de la báscula.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -629,7 +576,7 @@ private fun copiarFotoPrivada(
         }
 
         archivoDestino.absolutePath
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         archivoDestino.delete()
         null
     }
