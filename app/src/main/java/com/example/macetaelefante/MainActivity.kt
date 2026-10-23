@@ -50,14 +50,19 @@ import com.example.macetaelefante.data.WeightRecord
 import com.example.macetaelefante.data.WeightRepository
 import com.example.macetaelefante.data.WateringRepository
 import com.example.macetaelefante.ui.screens.WateringEntryScreen
-import com.example.macetaelefante.ui.screens.WateringHistoryScreen
 import com.example.macetaelefante.ui.screens.WeightEntryScreen
 import com.example.macetaelefante.ui.screens.WeightHistoryScreen
 import com.example.macetaelefante.ui.theme.MacetaElefanteTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.border
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,7 +123,7 @@ fun MacetaElefanteApp() {
 
     LaunchedEffect(Unit) {
         val registrosPeso = withContext(Dispatchers.IO) {
-            WeightRepository.obtenerTodos(context)
+            ordenarRegistrosPorFechaImagen(WeightRepository.obtenerTodos(context))
         }
 
         val ultimoRegistro = registrosPeso.firstOrNull()
@@ -172,15 +177,20 @@ fun MacetaElefanteApp() {
 
                     WeightRepository.guardar(context, registro)
 
-                    ultimoPeso = peso
-                    fechaUltimoPeso = fecha
-                    ultimaNota = notas
+                    val registros = ordenarRegistrosPorFechaImagen(
+                        WeightRepository.obtenerTodos(context)
+                    )
+                    val ultimoRegistro = registros.firstOrNull()
+                    val registroAnterior = registros.getOrNull(1)
 
-                    val registros = WeightRepository.obtenerTodos(context)
+                    ultimoPeso = ultimoRegistro?.weightGrams
+                    fechaUltimoPeso = ultimoRegistro?.dateTime.orEmpty()
+                    ultimaNota = ultimoRegistro?.notes.orEmpty()
+                    fotoPlantaPath = ultimoRegistro?.fotoPlantaPath
 
                     cambioPeso = calcularCambioPeso(
-                        ultimo = registros.firstOrNull(),
-                        anterior = registros.getOrNull(1)
+                        ultimo = ultimoRegistro,
+                        anterior = registroAnterior
                     )
 
                     pantalla = "inicio"
@@ -200,16 +210,20 @@ fun MacetaElefanteApp() {
 
                     WeightRepository.guardar(context, registro)
 
-                    ultimoPeso = peso
-                    fechaUltimoPeso = fecha
-                    ultimaNota = notas
-                    fotoPlantaPath = rutaPlanta
+                    val registros = ordenarRegistrosPorFechaImagen(
+                        WeightRepository.obtenerTodos(context)
+                    )
+                    val ultimoRegistro = registros.firstOrNull()
+                    val registroAnterior = registros.getOrNull(1)
 
-                    val registros = WeightRepository.obtenerTodos(context)
+                    ultimoPeso = ultimoRegistro?.weightGrams
+                    fechaUltimoPeso = ultimoRegistro?.dateTime.orEmpty()
+                    ultimaNota = ultimoRegistro?.notes.orEmpty()
+                    fotoPlantaPath = ultimoRegistro?.fotoPlantaPath
 
                     cambioPeso = calcularCambioPeso(
-                        ultimo = registros.firstOrNull(),
-                        anterior = registros.getOrNull(1)
+                        ultimo = ultimoRegistro,
+                        anterior = registroAnterior
                     )
 
                     pantalla = "inicio"
@@ -238,27 +252,15 @@ fun MacetaElefanteApp() {
             )
         }
 
-        "seleccionar_historial" -> {
-            SeleccionarHistorialScreen(
-                onHistorialPesos = {
-                    pantalla = "historial_pesos"
-                },
-                onHistorialRiegos = {
-                    pantalla = "historial_riegos"
-                },
-                onVolver = {
-                    pantalla = "inicio"
-                }
-            )
-        }
-
         "historial_pesos" -> {
             WeightHistoryScreen(
                 onBack = {
-                    pantalla = "seleccionar_historial"
+                    pantalla = "inicio"
                 },
                 onRegistroEliminado = {
-                    val registros = WeightRepository.obtenerTodos(context)
+                    val registros = ordenarRegistrosPorFechaImagen(
+                        WeightRepository.obtenerTodos(context)
+                    )
 
                     val ultimoRegistro = registros.firstOrNull()
                     val registroAnterior = registros.getOrNull(1)
@@ -278,23 +280,7 @@ fun MacetaElefanteApp() {
             )
         }
 
-        "historial_riegos" -> {
-            WateringHistoryScreen(
-                onBack = {
-                    pantalla = "seleccionar_historial"
-                },
-                onRegistroEliminado = {
-                    val ultimoRiego =
-                        WateringRepository.obtenerUltimo(context)
 
-                    fechaUltimoRiego = ultimoRiego?.dateTime.orEmpty()
-                    cantidadUltimoRiego = ultimoRiego?.waterAmountMl
-                    idUltimoRiego = ultimoRiego?.id
-
-                    mensaje = "Historial de riegos actualizado."
-                }
-            )
-        }
 
         else -> {
             HomeScreen(
@@ -317,71 +303,30 @@ fun MacetaElefanteApp() {
                 },
                 onVerHistorial = {
                     mensaje = ""
-                    pantalla = "seleccionar_historial"
+                    pantalla = "historial_pesos"
                 }
             )
         }
     }
 }
 
-@Composable
-private fun SeleccionarHistorialScreen(
-    onHistorialPesos: () -> Unit,
-    onHistorialRiegos: () -> Unit,
-    onVolver: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Historial",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
 
-        Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "¿Qué registros deseas consultar?",
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = onHistorialPesos,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-        ) {
-            Text("Historial de pesos")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = onHistorialRiegos,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-        ) {
-            Text("Historial de riegos")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedButton(
-            onClick = onVolver,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Volver al inicio")
-        }
+private fun ordenarRegistrosPorFechaImagen(
+    registros: List<WeightRecord>
+): List<WeightRecord> {
+    val formatoFecha = SimpleDateFormat(
+        "dd/MM/yyyy HH:mm",
+        Locale.getDefault()
+    ).apply {
+        isLenient = false
     }
+
+    return registros.sortedWith(
+        compareByDescending<WeightRecord> { registro ->
+            formatoFecha.parse(registro.dateTime)?.time ?: registro.id
+        }.thenByDescending { registro -> registro.id }
+    )
 }
 
 private fun calcularCambioPeso(
@@ -443,6 +388,7 @@ private fun calcularTiempoDesdeRiego(id: Long?): String {
     }
 }
 
+
 @Composable
 fun HomeScreen(
     ultimoPeso: Double?,
@@ -458,8 +404,18 @@ fun HomeScreen(
     onRegistrarRiego: () -> Unit,
     onVerHistorial: () -> Unit
 ) {
+    val verdeBosque = Color(0xFF355E3B)
+    val verdeSalvia = Color(0xFF8A9A5B)
+    val terracota = Color(0xFFB77950)
+    val arena = Color(0xFFF3EBDD)
+    val blanco = Color(0xFFFFFFFF)
+    val textoOscuro = Color(0xFF343A30)
+    val verdeClaro = Color(0xFFE8EDDF)
+    val terracotaClaro = Color(0xFFF4E5DA)
+
     Scaffold(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        containerColor = arena
     ) { paddingValues ->
 
         Column(
@@ -467,103 +423,133 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
+            // Encabezado
             Text(
                 text = "Mi jardín",
-                fontSize = 30.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = verdeBosque
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "Control y cuidado de mis plantas",
-                fontSize = 16.sp,
+                fontSize = 15.sp,
+                color = textoOscuro,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
+            // Tarjeta principal de la planta
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 2.dp,
+                        color = verdeSalvia,
+                        shape = RoundedCornerShape(24.dp)
+                    ),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = verdeSalvia
+                ),
                 elevation = CardDefaults.cardElevation(
-                    defaultElevation = 4.dp
+                    defaultElevation = 3.dp
                 )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Maceta Elefante",
-                        fontSize = 23.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "MACETA ELEFANTE",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = verdeSalvia,
+                        letterSpacing = 2.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Pie de elefante",
+                        fontSize = 25.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = verdeBosque,
+                        textAlign = TextAlign.Center
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Planta: Pie de elefante",
-                        fontSize = 16.sp
-                    )
-
-                    Text(
                         text = "Beaucarnea recurvata",
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = textoOscuro
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     FotoPlantaInicio(ruta = fotoPlantaPath)
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
+            // Título de seguimiento
             Text(
                 text = "Resumen de seguimiento",
-                fontSize = 21.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
+                color = verdeBosque,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Resumen del peso
+            // Tarjeta de peso
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = verdeClaro
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 1.dp
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
                 ) {
                     Text(
-                        text = "Último peso registrado",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
+                        text = "ÚLTIMO PESO REGISTRADO",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = verdeBosque,
+                        letterSpacing = 1.sp
                     )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = ultimoPeso?.let {
                             "${String.format(Locale.getDefault(), "%.1f", it)} g"
                         } ?: "Sin mediciones",
-                        fontSize = 25.sp,
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = verdeBosque
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
                         text = if (fechaUltimoPeso.isNotBlank()) {
@@ -571,55 +557,76 @@ fun HomeScreen(
                         } else {
                             "Fecha: sin registro"
                         },
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = textoOscuro
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    HorizontalDivider(color = verdeSalvia.copy(alpha = 0.4f))
 
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
                         text = "Comparación con la medición anterior",
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = textoOscuro
                     )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
 
                     Text(
                         text = cambioPeso,
-                        fontSize = 16.sp
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = verdeBosque
                     )
 
                     if (ultimaNota.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         Text(
                             text = "Última nota",
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = textoOscuro
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Text(text = ultimaNota)
+                        Text(
+                            text = ultimaNota,
+                            color = textoOscuro,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Resumen del riego
+            // Tarjeta de riego
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = terracotaClaro
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 1.dp
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
                 ) {
                     Text(
-                        text = "Último riego",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
+                        text = "ÚLTIMO RIEGO",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = terracota,
+                        letterSpacing = 1.sp
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -630,7 +637,7 @@ fun HomeScreen(
                         } ?: "Todavía no hay riegos registrados",
                         fontSize = 23.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = textoOscuro
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -641,85 +648,120 @@ fun HomeScreen(
                         } else {
                             "Fecha y hora: sin registro"
                         },
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = textoOscuro
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         text = calcularTiempoDesdeRiego(idUltimoRiego),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = terracota
                     )
                 }
             }
 
+            // Mensaje de confirmación
             if (mensaje.isNotBlank()) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = mensaje,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = verdeClaro
+                    )
+                ) {
+                    Text(
+                        text = mensaje,
+                        modifier = Modifier.padding(14.dp),
+                        color = verdeBosque,
+                        textAlign = TextAlign.Center,
+                        fontSize = 14.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
             Text(
                 text = "¿Qué deseas hacer?",
-                fontSize = 21.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
+                color = verdeBosque,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
+            // Botón de peso
             Button(
                 onClick = onRegistrarPeso,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = verdeBosque,
+                    contentColor = blanco
+                )
             ) {
                 Text(
                     text = "Registrar peso",
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Botón de riego
             Button(
                 onClick = onRegistrarRiego,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = verdeSalvia,
+                    contentColor = blanco
+                )
             ) {
                 Text(
                     text = "Registrar riego",
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedButton(
+            // Botón de historial
+            Button(
                 onClick = onVerHistorial,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = terracota,
+                    contentColor = blanco
+                )
             ) {
                 Text(
                     text = "Ver historial",
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
+
 
 @Composable
 private fun FotoPlantaInicio(
