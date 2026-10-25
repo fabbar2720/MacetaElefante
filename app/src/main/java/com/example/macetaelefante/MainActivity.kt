@@ -52,6 +52,7 @@ import com.example.macetaelefante.data.WateringRepository
 import com.example.macetaelefante.ui.screens.WateringEntryScreen
 import com.example.macetaelefante.ui.screens.WeightEntryScreen
 import com.example.macetaelefante.ui.screens.WeightHistoryScreen
+import com.example.macetaelefante.ui.screens.PlantCareScreen
 import com.example.macetaelefante.ui.theme.MacetaElefanteTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,6 +64,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.border
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -281,7 +283,13 @@ fun MacetaElefanteApp() {
         }
 
 
-
+        "guia_cuidados" -> {
+            PlantCareScreen(
+                onBack = {
+                    pantalla = "inicio"
+                }
+            )
+        }
         else -> {
             HomeScreen(
                 ultimoPeso = ultimoPeso,
@@ -304,6 +312,10 @@ fun MacetaElefanteApp() {
                 onVerHistorial = {
                     mensaje = ""
                     pantalla = "historial_pesos"
+                },
+                        onVerCuidados = {
+                    mensaje = ""
+                    pantalla = "guia_cuidados"
                 }
             )
         }
@@ -402,7 +414,8 @@ fun HomeScreen(
     mensaje: String,
     onRegistrarPeso: () -> Unit,
     onRegistrarRiego: () -> Unit,
-    onVerHistorial: () -> Unit
+    onVerHistorial: () -> Unit,
+    onVerCuidados: () -> Unit
 ) {
     val verdeBosque = Color(0xFF355E3B)
     val verdeSalvia = Color(0xFF8A9A5B)
@@ -758,6 +771,20 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            OutlinedButton(
+                onClick = onVerCuidados,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "Guía de cuidados",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }

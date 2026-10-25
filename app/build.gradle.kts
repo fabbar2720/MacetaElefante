@@ -1,4 +1,4 @@
-
+import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -20,6 +20,28 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        val perenualApiKey = providers.gradleProperty("PERENUAL_API_KEY")
+            .orElse(providers.environmentVariable("PERENUAL_API_KEY"))
+            .orElse(
+                providers.provider {
+                    val archivo = rootProject.file("local.properties")
+                    if (archivo.exists()) {
+                        Properties().apply {
+                            archivo.inputStream().use { load(it) }
+                        }.getProperty("PERENUAL_API_KEY", "")
+                    } else {
+                        ""
+                    }
+                }
+            )
+            .get()
+
+        buildConfigField(
+            "String",
+            "PERENUAL_API_KEY",
+            "\"${perenualApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        )
+
         testInstrumentationRunner =
             "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,10 +61,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
+    implementation("com.google.mlkit:translate:17.0.3")
     implementation(platform(libs.androidx.compose.bom))
 
     implementation(libs.androidx.activity.compose)
