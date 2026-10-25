@@ -1,4 +1,5 @@
 
+
 package com.example.macetaelefante.ui.screens
 
 import android.graphics.Bitmap
@@ -66,6 +67,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
+
+private val VerdeBosque = Color(0xFF355E3B)
+private val VerdeSalvia = Color(0xFF8A9A5B)
+private val Terracota = Color(0xFFB77950)
+private val Arena = Color(0xFFF3EBDD)
+private val Blanco = Color(0xFFFFFFFF)
+private val TextoOscuro = Color(0xFF343A30)
+private val VerdeClaro = Color(0xFFE8EDDF)
+private val TerracotaClaro = Color(0xFFF4E5DA)
 
 private const val MILISEGUNDOS_DIA = 86_400_000L
 
@@ -179,10 +189,10 @@ fun WeightHistoryScreen(
         val registro = registroPendienteEliminar!!
 
         AlertDialog(onDismissRequest = {
-                if (!eliminando) {
-                    registroPendienteEliminar = null
-                }
-            },
+            if (!eliminando) {
+                registroPendienteEliminar = null
+            }
+        },
             title = {
                 Text("Eliminar medición")
             },
@@ -308,31 +318,20 @@ fun WeightHistoryScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-                containerColor = Color(0xFFF3EBDD)
+        containerColor = Arena
     ) { innerPadding ->
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(20.dp)
         ) {
-            TextButton(onClick = onBack) {
-                Text("← Volver al inicio")
-            }
-
             Text(
-                text = "Historial de peso",
+                text = "Historial",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF355E3B)
-            )
-
-            Text(
-                text = "Observa cómo cambia el peso de la maceta " +
-                        "entre riegos y consulta todos tus registros.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = VerdeBosque
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -341,7 +340,7 @@ fun WeightHistoryScreen(
                 Text(
                     text = mensaje!!,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = VerdeBosque
                 )
 
                 TextButton(
@@ -403,24 +402,12 @@ fun WeightHistoryScreen(
                         }
 
                         item(key = "titulo_historial_combinado") {
-                            Column(
-                                verticalArrangement =
-                                    Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "Historial combinado",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text(
-                                    text = "Pesos y riegos ordenados del " +
-                                            "más reciente al más antiguo.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme
-                                        .onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "Historial combinado",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = VerdeBosque
+                            )
                         }
 
                         items(
@@ -464,7 +451,7 @@ private fun AnalisisDesdeUltimoRiego(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Blanco
         )
     ) {
         Column(
@@ -532,7 +519,7 @@ private fun AnalisisDesdeUltimoRiego(
                     text = "Todavía falta una medición de peso posterior " +
                             "al riego para establecer una referencia.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = TextoOscuro
                 )
                 return@Column
             }
@@ -547,7 +534,7 @@ private fun AnalisisDesdeUltimoRiego(
             Text(
                 text = etiquetaReferencia,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextoOscuro
             )
 
             Text(
@@ -643,11 +630,11 @@ private fun AnalisisDesdeUltimoRiego(
                     fontWeight = FontWeight.Bold,
                     color = when {
                         cambio < -0.05 ->
-                            MaterialTheme.colorScheme.error
+                            Terracota
                         cambio > 0.05 ->
-                            MaterialTheme.colorScheme.primary
+                            VerdeBosque
                         else ->
-                            MaterialTheme.colorScheme.onSurface
+                            TextoOscuro
                     }
                 )
 
@@ -692,7 +679,7 @@ private fun AnalisisDesdeUltimoRiego(
                         "si debes regar. También considera la humedad " +
                         "del sustrato y el estado de la planta.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextoOscuro
             )
         }
     }
@@ -707,7 +694,7 @@ private fun RegistroRiegoCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Blanco
         )
     ) {
         Column(
@@ -723,7 +710,7 @@ private fun RegistroRiegoCard(
             Text(
                 text = registro.dateTime,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextoOscuro
             )
 
             Text(
@@ -767,7 +754,7 @@ private fun RegistroRiegoCard(
             ) {
                 Text(
                     text = "Eliminar riego",
-                    color = MaterialTheme.colorScheme.error
+                    color = Terracota
                 )
             }
         }
@@ -782,7 +769,7 @@ private fun GraficaEvolucionPeso(
     val colorLinea = Color(0xFF355E3B)
     val colorTexto = Color(0xFF343A30)
     val colorCuadricula = Color(0xFFD5D0C4)
-    val colorFondo = Color(0xFFF9F5ED)
+    val colorFondo = Blanco
 
     val activity = LocalContext.current as? Activity
 
@@ -809,12 +796,6 @@ private fun GraficaEvolucionPeso(
         ) {
             EncabezadoGraficaPeso()
 
-            Text(
-                text = "De la medición más antigua a la más reciente",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             if (registros.size < 2) {
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -835,7 +816,7 @@ private fun GraficaEvolucionPeso(
                 Text(
                     text = "${registros.size} mediciones registradas",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = TextoOscuro
                 )
 
                 TextButton(
@@ -850,7 +831,10 @@ private fun GraficaEvolucionPeso(
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Ampliar gráfica")
+                    Text(
+                        text = "Ampliar gráfica",
+                        color = Terracota
+                    )
                 }
             }
         }
@@ -870,7 +854,7 @@ private fun GraficaEvolucionPeso(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(Arena)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -895,7 +879,10 @@ private fun GraficaEvolucionPeso(
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Cerrar gráfica")
+                    Text(
+                        text = "Cerrar gráfica",
+                        color = Terracota
+                    )
                 }
             }
         }
@@ -919,7 +906,7 @@ private fun EncabezadoGraficaPeso(
                 MaterialTheme.typography.titleLarge
             },
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF355E3B),
+            color = VerdeBosque,
             modifier = Modifier.weight(1f)
         )
 
@@ -940,7 +927,7 @@ private fun EncabezadoGraficaPeso(
                         )
                         .border(
                             width = 2.dp,
-                            color = Color(0xFF355E3B),
+                            color = VerdeBosque,
                             shape = CircleShape
                         )
                 )
@@ -957,7 +944,7 @@ private fun EncabezadoGraficaPeso(
             ) {
                 Text(
                     text = "💧",
-                    color = Color(0xFF2196F3),
+                    color = Terracota,
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -1386,7 +1373,7 @@ private fun GraficaLineal(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFE8EDDF)
+                        containerColor = VerdeClaro
                     )
                 ) {
                     Column(
@@ -1398,7 +1385,7 @@ private fun GraficaLineal(
                         Text(
                             text = "Medición seleccionada",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFF355E3B)
+                            color = VerdeBosque
                         )
 
                         androidx.compose.foundation.layout.Row(
@@ -1414,14 +1401,14 @@ private fun GraficaLineal(
                                 ),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF355E3B),
+                                color = VerdeBosque,
                                 modifier = Modifier.weight(1f)
                             )
 
                             Text(
                                 text = registro.dateTime,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF343A30),
+                                color = TextoOscuro,
                                 maxLines = 1
                             )
                         }
@@ -1436,7 +1423,7 @@ private fun GraficaLineal(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFE1EFF8)
+                        containerColor = TerracotaClaro
                     )
                 ) {
                     Column(
@@ -1465,14 +1452,14 @@ private fun GraficaLineal(
                                     text = "${riego.waterAmountMl} ml",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1769AA)
+                                    color = Terracota
                                 )
                             }
 
                             Text(
                                 text = riego.dateTime,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF343A30),
+                                color = TextoOscuro,
                                 maxLines = 1
                             )
                         }
@@ -1490,7 +1477,7 @@ private fun GraficaLineal(
                                     } ?: "—"
                                 }",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF343A30),
+                                color = TextoOscuro,
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -1501,12 +1488,12 @@ private fun GraficaLineal(
                                     } ?: "—"
                                 }",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF343A30),
+                                color = TextoOscuro,
                                 modifier = Modifier.weight(1f)
                             )
                         }
                     }}
-                }
+            }
 
             else -> {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1525,7 +1512,7 @@ private fun RegistroPesoCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Blanco
         )
     ) {
         Column(
@@ -1545,7 +1532,7 @@ private fun RegistroPesoCard(
             Text(
                 text = registro.dateTime,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextoOscuro
             )
 
             if (registro.notes.isNotBlank()) {
@@ -1573,7 +1560,7 @@ private fun RegistroPesoCard(
             ) {
                 Text(
                     text = "Eliminar medición",
-                    color = MaterialTheme.colorScheme.error
+                    color = Terracota
                 )
             }
         }
@@ -1604,7 +1591,7 @@ private fun FotoRegistro(
             Text(
                 text = "No se guardó una fotografía en este registro.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextoOscuro
             )
         } else {
             val estado by produceState(

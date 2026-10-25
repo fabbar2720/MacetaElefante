@@ -321,6 +321,7 @@ fun PlantCareScreen(onBack: () -> Unit) {
                     }
                     .padding(vertical = 6.dp)
             )
+            
 
             Spacer(modifier = Modifier.height(4.dp))
 

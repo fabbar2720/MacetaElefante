@@ -1,6 +1,8 @@
 
 package com.example.macetaelefante.ui.screens
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,36 +12,19 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -49,11 +34,22 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
+
+private val VerdeBosque = Color(0xFF355E3B)
+private val VerdeSalvia = Color(0xFF8A9A5B)
+private val Terracota = Color(0xFFB77950)
+private val Arena = Color(0xFFF3EBDD)
+private val Blanco = Color(0xFFFFFFFF)
+private val TextoOscuro = Color(0xFF343A30)
+private val VerdeClaro = Color(0xFFE8EDDF)
+private val TerracotaClaro = Color(0xFFF4E5DA)
 
 @Composable
 fun WeightEntryScreen(
@@ -65,6 +61,14 @@ fun WeightEntryScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val pesoRequester = remember {
+        BringIntoViewRequester()
+    }
+
+    val notasRequester = remember {
+        BringIntoViewRequester()
+    }
 
     var pesoTexto by rememberSaveable {
         mutableStateOf("")
@@ -86,10 +90,6 @@ fun WeightEntryScreen(
         mutableStateOf("")
     }
 
-    var fechaHoraDisponible by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     var leyendoPeso by remember {
         mutableStateOf(false)
     }
@@ -98,172 +98,150 @@ fun WeightEntryScreen(
         mutableStateOf(false)
     }
 
-    var mensajeLectura by rememberSaveable {
-        mutableStateOf("")
-    }
+    fun calendarioSeleccionado(): Calendar {
+        val calendario = Calendar.getInstance()
 
-    val selectorFoto =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri ->
-            if (uri != null) {
-                fotoBascula = uri
-                pesoTexto = ""
-                mensajeError = ""
-                mensajeLectura = "Analizando la fotografía..."
-                leyendoPeso = true
-
-                scope.launch {
-                    val fechaExif = withContext(Dispatchers.IO) {
-                        leerFechaHoraExif(context, uri)
-                    }
-
-                    if (fechaExif != null) {
-                        fechaHora = fechaExif
-                        fechaHoraDisponible = true
-                    } else {
-                        fechaHora = ""
-                        fechaHoraDisponible = false
-                    }
-
-                    try {
-                        val imagen = InputImage.fromFilePath(
-                            context,
-                            uri
-                        )
-
-                        val reconocedor = TextRecognition.getClient(
-                            TextRecognizerOptions.DEFAULT_OPTIONS
-                        )
-
-                        reconocedor.process(imagen)
-                            .addOnSuccessListener { resultado ->
-                                val patron = Regex(
-                                    """(?<!\d)\d{1,6}(?:[.,]\d{1,2})?(?!\d)"""
-                                )
-
-                                val coincidencia = patron.find(
-                                    resultado.text
-                                )
-
-                                if (coincidencia != null) {
-                                    pesoTexto = coincidencia.value
-                                        .replace(',', '.')
-
-                                    mensajeLectura =
-                                        "Peso detectado. Verifica que " +
-                                                "el número sea correcto."
-                                } else {
-                                    mensajeLectura =
-                                        "No se detectó el peso. " +
-                                                "Puedes introducirlo manualmente."
-                                }
-
-                                if (!fechaHoraDisponible) {
-                                    mensajeLectura +=
-                                        "\nLa foto no contiene una fecha " +
-                                                "EXIF válida. Usa una foto " +
-                                                "original que conserve sus metadatos."
-                                }
-
-                                leyendoPeso = false
-                                reconocedor.close()
-                            }
-                            .addOnFailureListener {
-                                leyendoPeso = false
-                                mensajeLectura =
-                                    "No se pudo leer el peso. " +
-                                            "Introdúcelo manualmente."
-
-                                if (!fechaHoraDisponible) {
-                                    mensajeLectura +=
-                                        "\nTampoco se encontró fecha EXIF."
-                                }
-
-                                reconocedor.close()
-                            }
-                    } catch (e: Exception) {
-                        leyendoPeso = false
-                        mensajeLectura =
-                            "No se pudo analizar la foto. " +
-                                    "Introduce el peso manualmente."
-                    }
+        if (fechaHora.isNotBlank()) {
+            try {
+                val formato = SimpleDateFormat(
+                    "dd/MM/yyyy HH:mm",
+                    Locale.getDefault()
+                ).apply {
+                    isLenient = false
                 }
+
+                val fecha = formato.parse(fechaHora)
+
+                if (fecha != null) {
+                    calendario.time = fecha
+                }
+            } catch (_: Exception) {
+                // Usar la fecha actual.
             }
         }
 
-    Scaffold { innerPadding ->
+        return calendario
+    }
+
+    fun actualizarFecha(
+        anio: Int,
+        mes: Int,
+        dia: Int
+    ) {
+        val calendario = calendarioSeleccionado()
+
+        calendario.set(Calendar.YEAR, anio)
+        calendario.set(Calendar.MONTH, mes)
+        calendario.set(Calendar.DAY_OF_MONTH, dia)
+
+        fechaHora = SimpleDateFormat(
+            "dd/MM/yyyy HH:mm",
+            Locale.getDefault()
+        ).format(calendario.time)
+
+        mensajeError = ""
+    }
+
+    fun actualizarHora(
+        hora: Int,
+        minuto: Int
+    ) {
+        val calendario = calendarioSeleccionado()
+
+        calendario.set(Calendar.HOUR_OF_DAY, hora)
+        calendario.set(Calendar.MINUTE, minuto)
+
+        fechaHora = SimpleDateFormat(
+            "dd/MM/yyyy HH:mm",
+            Locale.getDefault()
+        ).format(calendario.time)
+
+        mensajeError = ""
+    }
+
+    val selectorFoto = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            fotoBascula = uri
+            pesoTexto = ""
+            mensajeError = ""
+            leyendoPeso = true
+
+            scope.launch {
+                val fechaExif = withContext(Dispatchers.IO) {
+                    leerFechaHoraExif(context, uri)
+                }
+
+                if (fechaExif != null) {
+                    fechaHora = fechaExif
+                }
+
+                try {
+                    val imagen = InputImage.fromFilePath(
+                        context,
+                        uri
+                    )
+
+                    val reconocedor = TextRecognition.getClient(
+                        TextRecognizerOptions.DEFAULT_OPTIONS
+                    )
+
+                    reconocedor.process(imagen)
+                        .addOnSuccessListener { resultado ->
+                            val patron = Regex(
+                                """(?<!\d)\d{1,6}(?:[.,]\d{1,2})?(?!\d)"""
+                            )
+
+                            val coincidencia = patron.find(
+                                resultado.text
+                            )
+
+                            if (coincidencia != null) {
+                                pesoTexto = coincidencia.value
+                                    .replace(',', '.')
+                            }
+
+                            leyendoPeso = false
+                            reconocedor.close()
+                        }
+                        .addOnFailureListener {
+                            leyendoPeso = false
+                            reconocedor.close()
+                        }
+                } catch (_: Exception) {
+                    leyendoPeso = false
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        containerColor = Arena
+    ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            TextButton(onClick = onBack) {
-                Text("← Volver")
-            }
 
             Text(
                 text = "Registrar peso",
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = VerdeBosque
             )
 
             Text(
-                text = "Maceta Elefante",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor =
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Fecha y hora de la fotografía",
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Text(
-                        text = if (fechaHoraDisponible) {
-                            fechaHora
-                        } else {
-                            "Fecha EXIF no disponible"
-                        },
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    Text(
-                        text = if (fechaHoraDisponible) {
-                            "Tomada de los metadatos de la foto."
-                        } else {
-                            "Selecciona una fotografía original que conserve " +
-                                    "la fecha y hora en sus metadatos."
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            Text(
-                text = "Fotografía de la maceta y la báscula",
+                text = "Foto",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Text(
-                text = "Procura que aparezcan en la misma foto la planta " +
-                        "y el número de la báscula.",
-                style = MaterialTheme.typography.bodyMedium
+                fontWeight = FontWeight.Bold,
+                color = VerdeBosque
             )
 
             PhotoPreview(
@@ -272,11 +250,16 @@ fun WeightEntryScreen(
                 description = "Fotografía de la maceta y la báscula"
             )
 
-            OutlinedButton(
+            Button(
                 onClick = {
                     selectorFoto.launch("image/*")
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = VerdeBosque,
+                    contentColor = Blanco
+                )
             ) {
                 Text(
                     if (fotoBascula == null) {
@@ -287,31 +270,136 @@ fun WeightEntryScreen(
                 )
             }
 
+            if (fotoBascula != null) {
+                Button(
+                    onClick = {
+                        fotoBascula = null
+                        mensajeError = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Terracota,
+                        contentColor = Blanco
+                    )
+                ) {
+                    Text("Quitar fotografía")
+                }
+            }
+
             if (leyendoPeso) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        color = VerdeBosque
+                    )
 
                     Text(
                         text = "Analizando la fotografía...",
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = TextoOscuro
                     )
                 }
             }
 
-            if (mensajeLectura.isNotBlank()) {
+            // Fecha y hora con botones de iconos.
+            Text(
+                text = "Fecha y hora",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = VerdeBosque
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
                 Text(
-                    text = mensajeLectura,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    text = if (fechaHora.isNotBlank()) {
+                        fechaHora
+                    } else {
+                        "Selecciona fecha y hora"
+                    },
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = TextoOscuro
                 )
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = VerdeBosque
+                ) {
+                    IconButton(
+                        onClick = {
+                            val calendario =
+                                calendarioSeleccionado()
+
+                            DatePickerDialog(
+                                context,
+                                { _, anio, mes, dia ->
+                                    actualizarFecha(
+                                        anio,
+                                        mes,
+                                        dia
+                                    )
+                                },
+                                calendario.get(Calendar.YEAR),
+                                calendario.get(Calendar.MONTH),
+                                calendario.get(
+                                    Calendar.DAY_OF_MONTH
+                                )
+                            ).show()
+                        }
+                    ) {
+                        Text(
+                            text = "📅",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = VerdeBosque
+                ) {
+                    IconButton(
+                        onClick = {
+                            val calendario =
+                                calendarioSeleccionado()
+
+                            TimePickerDialog(
+                                context,
+                                { _, hora, minuto ->
+                                    actualizarHora(
+                                        hora,
+                                        minuto
+                                    )
+                                },
+                                calendario.get(
+                                    Calendar.HOUR_OF_DAY
+                                ),
+                                calendario.get(Calendar.MINUTE),
+                                true
+                            ).show()
+                        }
+                    ) {
+                        Text(
+                            text = "🕒",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                }
             }
 
             Text(
                 text = "Peso de la maceta",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold,
+                color = VerdeBosque
             )
 
             OutlinedTextField(
@@ -320,7 +408,17 @@ fun WeightEntryScreen(
                     pesoTexto = it
                     mensajeError = ""
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(pesoRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            scope.launch {
+                                delay(300)
+                                pesoRequester.bringIntoView()
+                            }
+                        }
+                    },
                 label = {
                     Text("Peso en gramos")
                 },
@@ -330,13 +428,23 @@ fun WeightEntryScreen(
                 singleLine = true,
                 suffix = {
                     Text("g")
-                }
-            )
-
-            Text(
-                text = "Revisa el peso detectado y corrígelo " +
-                        "si es necesario antes de guardar.",
-                style = MaterialTheme.typography.bodySmall
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
+                    focusedLabelColor = Color.Black,
+                    unfocusedLabelColor = Color.Black,
+                    focusedPlaceholderColor = Color.DarkGray,
+                    unfocusedPlaceholderColor = Color.DarkGray,
+                    focusedSuffixColor = Color.Black,
+                    unfocusedSuffixColor = Color.Black,
+                    focusedContainerColor = Blanco,
+                    unfocusedContainerColor = Blanco,
+                    focusedIndicatorColor = VerdeBosque,
+                    unfocusedIndicatorColor = VerdeSalvia,
+                    cursorColor = VerdeBosque
+                )
             )
 
             OutlinedTextField(
@@ -344,32 +452,68 @@ fun WeightEntryScreen(
                 onValueChange = {
                     notas = it
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(notasRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            scope.launch {
+                                delay(300)
+                                notasRequester.bringIntoView()
+                            }
+                        }
+                    },
                 label = {
                     Text("Notas (opcional)")
                 },
                 placeholder = {
                     Text("Aspecto de la planta, ubicación...")
                 },
-                minLines = 2
+                minLines = 2,
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
+                    focusedLabelColor = Color.Black,
+                    unfocusedLabelColor = Color.Black,
+                    focusedPlaceholderColor = Color.DarkGray,
+                    unfocusedPlaceholderColor = Color.DarkGray,
+                    focusedContainerColor = Blanco,
+                    unfocusedContainerColor = Blanco,
+                    focusedIndicatorColor = VerdeBosque,
+                    unfocusedIndicatorColor = VerdeSalvia,
+                    cursorColor = VerdeBosque
+                )
             )
 
             if (mensajeError.isNotBlank()) {
-                Text(
-                    text = mensajeError,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = TerracotaClaro
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = mensajeError,
+                        color = TextoOscuro,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedButton(
+                Button(
                     onClick = onBack,
                     modifier = Modifier.weight(1f),
-                    enabled = !guardando
+                    enabled = !guardando,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Terracota,
+                        contentColor = Blanco
+                    )
                 ) {
                     Text("Cancelar")
                 }
@@ -388,37 +532,31 @@ fun WeightEntryScreen(
                         ) {
                             mensajeError =
                                 "Introduce un peso válido mayor que cero."
-                        } else if (fotoBascula == null) {
+                        } else if (fechaHora.isBlank()) {
                             mensajeError =
-                                "Selecciona una fotografía de la maceta " +
-                                        "y la báscula."
-                        } else if (!fechaHoraDisponible) {
-                            mensajeError =
-                                "No se puede guardar: la fotografía " +
-                                        "no contiene una fecha EXIF válida."
+                                "Selecciona la fecha y hora del registro."
                         } else {
                             guardando = true
                             mensajeError = ""
 
                             scope.launch {
                                 try {
-                                    val rutaFoto = withContext(
-                                        Dispatchers.IO
-                                    ) {
-                                        copiarFotoPrivada(
-                                            context,
-                                            fotoBascula!!,
-                                            "maceta"
-                                        )
-                                    } ?: error(
-                                        "No se pudo guardar la fotografía."
-                                    )
+                                    val rutaFoto: String? =
+                                        if (fotoBascula != null) {
+                                            withContext(Dispatchers.IO) {
+                                                copiarFotoPrivada(
+                                                    context,
+                                                    fotoBascula!!,
+                                                    "maceta"
+                                                )
+                                            } ?: error(
+                                                "No se pudo guardar la fotografía."
+                                            )
+                                        } else {
+                                            null
+                                        }
 
                                     if (onSaveWithPhotos != null) {
-                                        // Se conserva la firma actual
-                                        // para no tener que cambiar la
-                                        // arquitectura de la aplicación.
-                                        // Ambos campos usan la misma ruta.
                                         onSaveWithPhotos(
                                             peso,
                                             fechaHora,
@@ -444,17 +582,26 @@ fun WeightEntryScreen(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = !leyendoPeso && !guardando
+                    enabled = !leyendoPeso && !guardando,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VerdeBosque,
+                        contentColor = Blanco
+                    )
                 ) {
                     if (guardando) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(
+                            color = Blanco
+                        )
                     } else {
                         Text("Guardar")
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
         }
     }
 }
@@ -469,9 +616,13 @@ private fun leerFechaHoraExif(
             ?.use { input ->
                 val exif = ExifInterface(input)
 
-                exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
-                    ?: exif.getAttribute(ExifInterface.TAG_DATETIME_DIGITIZED)
-                    ?: exif.getAttribute(ExifInterface.TAG_DATETIME)
+                exif.getAttribute(
+                    ExifInterface.TAG_DATETIME_ORIGINAL
+                ) ?: exif.getAttribute(
+                    ExifInterface.TAG_DATETIME_DIGITIZED
+                ) ?: exif.getAttribute(
+                    ExifInterface.TAG_DATETIME
+                )
             } ?: return null
 
         val formatoExif = SimpleDateFormat(
@@ -481,7 +632,8 @@ private fun leerFechaHoraExif(
             isLenient = false
         }
 
-        val fecha = formatoExif.parse(fechaExif) ?: return null
+        val fecha = formatoExif.parse(fechaExif)
+            ?: return null
 
         SimpleDateFormat(
             "dd/MM/yyyy HH:mm",
@@ -517,8 +669,7 @@ private fun PhotoPreview(
             .height(220.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor =
-                MaterialTheme.colorScheme.surfaceVariant
+            containerColor = VerdeClaro
         )
     ) {
         if (bitmap != null) {
@@ -537,12 +688,8 @@ private fun PhotoPreview(
             ) {
                 Text(
                     text = "Aquí aparecerá tu fotografía",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                Text(
-                    text = "Incluye la planta y el peso de la báscula.",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextoOscuro
                 )
             }
         }
@@ -554,7 +701,10 @@ private fun copiarFotoPrivada(
     uri: Uri,
     prefijo: String
 ): String? {
-    val carpeta = File(context.filesDir, "fotografias")
+    val carpeta = File(
+        context.filesDir,
+        "fotografias"
+    )
 
     if (!carpeta.exists() && !carpeta.mkdirs()) {
         return null
@@ -566,8 +716,8 @@ private fun copiarFotoPrivada(
     )
 
     return try {
-        val input = context.contentResolver.openInputStream(uri)
-            ?: return null
+        val input = context.contentResolver
+            .openInputStream(uri) ?: return null
 
         input.use { origen ->
             archivoDestino.outputStream().use { destino ->
